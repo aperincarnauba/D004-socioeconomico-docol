@@ -131,12 +131,16 @@ def calcular_desempenho(df, selected_centers, coluna_calculo, mapa_conversao=Non
                 'materiais_faltantes': [('N/A', "A coluna 'Unidade de medida' não foi encontrada nos relatórios.", 'N/A')]
             }
         df_filtrado['Unidade de medida'] = df_filtrado['Unidade de medida'].astype(str).str.strip().str.lower()
+        
+        # --- MAPA SIMPLES ATUALIZADO ---
         mapa_simples = {
-            't': 1000, 'tonelada': 1000,
-            'milhar': 1000, 'milha': 1000,
-            'cento': 100,
+            't': 1000, 'tonelada': 1000, 'to': 1000, # ADICIONADO 'to'
+            'milhar': 1000, 'mil': 1000, 
+            'cento': 100, 'ct': 100, # ADICIONADO 'ct'
             'ml': 1000, 'pt': 1000,
         }
+        # --- FIM DA ATUALIZAÇÃO ---
+        
         unidades_complexas = ['cx', 'caixa', 'cj', 'conjunto', 'pac', 'pct', 'pacote', 'rl', 'rolo', 'sac', 'saco']
         def converter_quantidade(row):
             unidade = row['Unidade de medida']
@@ -159,7 +163,6 @@ def calcular_desempenho(df, selected_centers, coluna_calculo, mapa_conversao=Non
                 'materiais_faltantes': sorted(list(materiais_faltantes))
             }
 
-    # CORRIGIDO: String "Indefinido" completada
     df_filtrado['Categoria'] = 'Indefinido'
     material_sucata_prefixos = ('10028330000', '10032677000', '10002709000', '10001099000', '10001103000')
     mask_sucata = df_filtrado['Material'].str.startswith(material_sucata_prefixos)
@@ -167,7 +170,7 @@ def calcular_desempenho(df, selected_centers, coluna_calculo, mapa_conversao=Non
     # --- LÓGICA DE BENEFICIAMENTO CORRIGIDA ---
     cliente_fornec_numeric = pd.to_numeric(df_filtrado['Cliente/Fornec'], errors='coerce')
     fornecedores_benef = [1048374, 1028618]
-    # Compara os 2 fornecedores E o CFOP como texto (TYPO CORRIGIDO AQUI)
+    # Compara os 2 fornecedores E o CFOP como texto
     mask_benef = (cliente_fornec_numeric.isin(fornecedores_benef)) & (df_filtrado['CFOP'] == '2124AA')
     # --- FIM DA CORREÇÃO ---
 

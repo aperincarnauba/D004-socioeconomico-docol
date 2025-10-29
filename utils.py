@@ -25,11 +25,14 @@ def salvar_relatorio_excel(resultados_individuais, resultado_soma, meses_anos, q
     # Define o nome da coluna de valor com base no tipo de análise
     nome_coluna_valor = "Quantidade" if nome_analise_arquivo == "Quantidade" else "Valor"
 
+    # ATUALIZADO: KPIs desejados, COM "Total Fora (Geral)" REMOVIDO
     kpis_desejados = [
         "Total Local", "Total Fora", "Total Importado", "Total Beneficiamento",
-        "Total Sucata", "Total Nacional Fora", "Total Geral", "% - Sucata",
-        "% - Beneficiamento", "% - Local", "% - Fora", "% - Importação",
-        "% - Nacional Fora"
+        "Total Sucata", 
+        "Total Nacional Fora", # "Fora Nacional" (sem EX)
+        "Total Geral", 
+        "% - Sucata", "% - Beneficiamento", "% - Local", "% - Fora", 
+        "% - Importação", "% - Nacional Fora"
     ]
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -39,6 +42,7 @@ def salvar_relatorio_excel(resultados_individuais, resultado_soma, meses_anos, q
 
         # Salva a aba de cada mês
         for resultado, mes_ano in zip(resultados_individuais, meses_anos):
+            # Filtra apenas os KPIs definidos acima
             resultado_filtrado = {key: resultado[key] for key in kpis_desejados if key in resultado}
             # Usa o nome da coluna correto
             df_mes = pd.DataFrame(list(resultado_filtrado.items()), columns=['Indicador', nome_coluna_valor])
@@ -115,6 +119,10 @@ def calcular_desempenho(df, selected_centers, coluna_calculo, mapa_conversao=Non
     
     df_filtrado['Material'] = df_filtrado['Material'].str.lstrip('0')
     
+    # Garante que a coluna CFOP seja tratada como texto (essencial para a máscara)
+    if 'CFOP' in df_filtrado.columns:
+        df_filtrado['CFOP'] = df_filtrado['CFOP'].astype(str).str.strip()
+    
     if coluna_calculo == 'Quantidade' and mapa_conversao is not None:
         materiais_faltantes = set()
         if 'Unidade de medida' not in df_filtrado.columns:
@@ -151,42 +159,72 @@ def calcular_desempenho(df, selected_centers, coluna_calculo, mapa_conversao=Non
                 'materiais_faltantes': sorted(list(materiais_faltantes))
             }
 
+    # CORRIGIDO: String "Indefinido" completada
     df_filtrado['Categoria'] = 'Indefinido'
     material_sucata_prefixos = ('10028330000', '10032677000', '10002709000', '10001099000', '10001103000')
     mask_sucata = df_filtrado['Material'].str.startswith(material_sucata_prefixos)
+    
+    # --- LÓGICA DE BENEFICIAMENTO CORRIGIDA ---
     cliente_fornec_numeric = pd.to_numeric(df_filtrado['Cliente/Fornec'], errors='coerce')
-    mask_benef = (cliente_fornec_numeric == 1048374) & (df_filtrado['Código do IVA'] == 'I2')
+    fornecedores_benef = [1048374, 1028618]
+    # Compara os 2 fornecedores E o CFOP como texto (TYPO CORRIGIDO AQUI)
+    mask_benef = (cliente_fornec_numeric.isin(fornecedores_benef)) & (df_filtrado['CFOP'] == '2124AA')
+    # --- FIM DA CORREÇÃO ---
+
     mask_importado = df_filtrado['UF'] == 'EX'
     mask_local = df_filtrado['UF'].isin(['SC', 'PR'])
     mask_uf_nula = df_filtrado['UF'].isnull() | (df_filtrado['UF'] == '')
 
+    # Aplica as categorias em ordem de prioridade
     df_filtrado.loc[mask_sucata, 'Categoria'] = 'Sucata'
     df_filtrado.loc[mask_benef & (df_filtrado['Categoria'] == 'Indefinido'), 'Categoria'] = 'Beneficiamento'
     df_filtrado.loc[mask_importado & (df_filtrado['Categoria'] == 'Indefinido'), 'Categoria'] = 'Importado'
     df_filtrado.loc[mask_uf_nula & (df_filtrado['Categoria'] == 'Indefinido'), 'Categoria'] = 'UF Nula'
     df_filtrado.loc[mask_local & (df_filtrado['Categoria'] == 'Indefinido'), 'Categoria'] = 'Local'
-    df_filtrado.loc[df_filtrado['Categoria'] == 'Indefinido', 'Categoria'] = 'Fora'
+    df_filtrado.loc[df_filtrado['Categoria'] == 'Indefinido', 'Categoria'] = 'Fora' # Esta é a categoria "Fora Nacional"
 
+    # --- CÁLCULOS ATUALIZADOS ---
     soma_sucata = df_filtrado.loc[df_filtrado['Categoria'] == 'Sucata', coluna_calculo].sum()
     valor_beneficiamento = df_filtrado.loc[df_filtrado['Categoria'] == 'Beneficiamento', coluna_calculo].sum()
     valor_importado = df_filtrado.loc[df_filtrado['Categoria'] == 'Importado', coluna_calculo].sum()
     valor_local = df_filtrado.loc[df_filtrado['Categoria'] == 'Local', coluna_calculo].sum()
-    valor_fora = df_filtrado.loc[df_filtrado['Categoria'] == 'Fora', coluna_calculo].sum()
-    valor_nacional_500km = valor_fora
+    valor_uf_nula = df_filtrado.loc[df_filtrado['Categoria'] == 'UF Nula', coluna_calculo].sum()
+    
+    # Esta é a Categoria 'Fora' (tudo menos SC, PR, EX, Nula)
+    valor_categoria_fora = df_filtrado.loc[df_filtrado['Categoria'] == 'Fora', coluna_calculo].sum()
+    
+    # --- LÓGICA ATUALIZADA (Conforme pedido) ---
+    
+    # "Total Nacional Fora" = tudo menos SC PR e EX (ou seja, Fora + UF Nula)
+    valor_total_nacional_fora = valor_categoria_fora + valor_uf_nula
+    
+    # "Total Fora" = tudo menos SC e PR (ou seja, Fora + UF Nula + Importado)
+    valor_total_fora = valor_total_nacional_fora + valor_importado
+    
+    # --- FIM DA ATUALIZAÇÃO ---
+
     total_geral = df_filtrado[coluna_calculo].sum()
+    
+    # --- PORCENTAGENS ATUALIZADAS ---
     porcentagens = {
         "% - Sucata": soma_sucata / total_geral if total_geral else 0,
         "% - Beneficiamento": valor_beneficiamento / total_geral if total_geral else 0,
         "% - Local": valor_local / total_geral if total_geral else 0,
-        "% - Fora": valor_fora / total_geral if total_geral else 0,
+        "% - Fora": valor_total_fora / total_geral if total_geral else 0, # % Fora agora é o "Tudo menos SC e PR"
         "% - Importação": valor_importado / total_geral if total_geral else 0,
-        "% - Nacional Fora": valor_nacional_500km / total_geral if total_geral else 0
+        "% - Nacional Fora": valor_total_nacional_fora / total_geral if total_geral else 0, # % Nacional Fora é "Tudo menos SC, PR e EX"
     }
     
+    # --- RETORNO ATUALIZADO ---
     return {
         "status": "sucesso",
-        "Total Local": valor_local, "Total Fora": valor_fora, "Total Importado": valor_importado, 
-        "Total Beneficiamento": valor_beneficiamento, "Total Sucata": soma_sucata, 
-        "Total Nacional Fora": valor_nacional_500km, "Total Geral": total_geral, 
+        "Total Local": valor_local, 
+        "Total Fora": valor_total_fora, # "Total Fora" = Tudo menos SC e PR
+        "Total Importado": valor_importado, 
+        "Total Beneficiamento": valor_beneficiamento, 
+        "Total Sucata": soma_sucata, 
+        "Total Nacional Fora": valor_total_nacional_fora, # "Total Nacional Fora" = Tudo menos SC, PR e EX
+        "Total Geral": total_geral, 
         **porcentagens,
     }
+

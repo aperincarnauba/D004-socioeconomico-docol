@@ -26,17 +26,17 @@ pd.set_option("styler.render.max_elements", 1_000_000)
 # --- LÓGICA PRINCIPAL DO APP ---
 
 # --- LINHAS COMENTADAS PARA DESATIVAR A SELEÇÃO ---
-# st.markdown("### Selecione o tipo de análise:")
-# tipo_analise = st.selectbox(
-#     "Análise",
-#     ("Análise Financeira (R$)", "Análise por Quantidade"),
-#     label_visibility="collapsed"
-# )
+st.markdown("### Selecione o tipo de análise:")
+tipo_analise = st.selectbox(
+    "Análise",
+    ("Análise Financeira (R$)", "Análise por Quantidade"),
+    label_visibility="collapsed"
+)
 # --- FIM DAS LINHAS COMENTADAS ---
 
 # --- VARIÁVEIS FIXADAS PARA O MODO "QUANTIDADE" ---
 # Força a aplicação a rodar sempre a análise por quantidade.
-tipo_analise = "Análise por Quantidade"
+# tipo_analise = "Análise por Quantidade"
 # --- FIM DAS VARIÁVEIS FIXADAS ---
 
 

@@ -11,9 +11,11 @@ st.markdown(get_header_html(), unsafe_allow_html=True)
 st.title("Gerador de Relatório Socioeconômico")
 st.markdown("---")
 
-col_periodo, _ = st.columns([1, 3])
+col_periodo, col_fator, _ = st.columns([1, 1, 2])
 with col_periodo:
     qtd_meses = st.number_input("Qtd. Meses", min_value=1, max_value=12, value=1)
+with col_fator:
+    fator_pis_cofins = st.number_input("Fator Conversão (PIS/COFINS)", value=0.9075, format="%.4f", step=0.0001)
 
 uploaded_files = []
 cols = st.columns(3)
@@ -25,7 +27,7 @@ for i in range(qtd_meses):
 if len(uploaded_files) == qtd_meses and st.button("▶️ Processar Dados", type="primary"):
     with st.spinner("Consolidando dados..."):
         try:
-            resultados = processar_dados_geral(uploaded_files)
+            resultados = processar_dados_geral(uploaded_files, fator_reducao=fator_pis_cofins)
             nome_arquivo = resultados['nome_arquivo']
             
             # --- FRENTE 1: Fornecedores ---

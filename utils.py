@@ -8,6 +8,9 @@ UNIDADES_PESO_TON = ['t', 'ton', 'tonelada', 'to'] # Multiplica por 1000
 
 PREFIXOS_SUCATA = ('10028330000', '10032677000', '10002709000', '10001099000', '10001103000')
 
+# Itens que NÃO sofrem redução de PIS/COFINS (busca por substring "is in")
+MATERIAIS_EXCECAO_REDUCAO = ('2833000', '3267700')
+
 FORNECEDORES_BENEFICIAMENTO = [1048374, 1028618]
 CFOP_BENEFICIAMENTO = '2124AA'
 CFOPS_FRETE = ['1352AA', '2352AA']
@@ -43,7 +46,7 @@ def definir_origem(uf):
     else:
         return 'Fora'
 
-def processar_dados_geral(files):
+def processar_dados_geral(files, fator_reducao=0.9075):
     dfs = []
     
     # --- 1. Leitura e Consolidação ---
@@ -88,6 +91,14 @@ def processar_dados_geral(files):
 
     # --- 3. Filtro Global (Remove Frete) ---
     df_completo = df_completo[~df_completo['CFOP'].isin(CFOPS_FRETE)].copy()
+
+    # --- 3.1 Aplicação do Fator PIS/COFINS (NOVA LÓGICA) ---
+    # Cria regex para buscar '2833000' ou '3267700' dentro do código do material
+    pat_excecao = '|'.join(MATERIAIS_EXCECAO_REDUCAO)
+    mask_excecao = df_completo['Material'].astype(str).str.contains(pat_excecao, na=False)
+    
+    # Aplica o fator apenas onde NÃO for exceção (reduz o valor líquido)
+    df_completo.loc[~mask_excecao, 'Valor líquido'] = df_completo.loc[~mask_excecao, 'Valor líquido'] * fator_reducao
 
     # --- 4. Frente Fornecedores ---
     # Adicionado UF e Origem_Classificacao ao agrupamento
